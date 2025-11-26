@@ -1,98 +1,116 @@
-import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
+from torch.quantization import quantize_dynamic
 import torch
+import logging
+from pathlib import Path
+import os
 
-#base model
-BASE_MODEL_NAME = "microsoft/phi-2"
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-#saving LoRA files
-LORA_PATH = "./lora-weights"
+app = FastAPI()
 
-#set device
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"--- Using device: {DEVICE} ---")
-
-#--- load in the model
-
-print("--- Loading base model... ---")
-#;load the base model
-base_model = AutoModelForCausalLM.from_pretrained(
-    BASE_MODEL_NAME,
-    dtype=torch.bfloat16,
-    device_map=DEVICE,
-    trust_remote_code=True #required for phi-2
+# Add CORS middleware to allow frontend to communicate with API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-print("--- Loading tokenizer... ---")
-tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_NAME, trust_remote_code=True)
-if tokenizer.pad_token is None:
+# Mount static files directory for images, CSS, etc.
+static_dir = Path(__file__).parent / "static"
+# Check if static dir exists before mounting to prevent crash loop if missing
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+BASE_MODEL = "microsoft/phi-2"
+# Use absolute path to adapter directory
+ADAPTER_PATH = str(Path(__file__).parent / "soprano_adapter")
+
+# Global variables for model and tokenizer
+model = None
+tokenizer = None
+
+@app.on_event("startup")
+async def load_model():
+    """Load the model and tokenizer on startup"""
+    global model, tokenizer
+    
+    logger.info("=" * 60)
+    logger.info("Starting model loading process...")
+    logger.info("=" * 60)
+    
+    torch.set_num_threads(4)
+    logger.info("Set torch threads to 4 for CPU optimization")
+    
+    # Load tokenizer
+    logger.info("Loading tokenizer...")
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.pad_token = tokenizer.eos_token
+    logger.info("✓ Tokenizer loaded")
 
-print(f"--- Loading LoRA adapters from {LORA_PATH}... ---")
+    # Load base model
+    logger.info("Loading base model...")
+    # Load model without device_map first to avoid structure issues with PEFT
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        dtype=torch.float32, # Use float32 for CPU stability before quantization
+        low_cpu_mem_usage=True
+    )
+    logger.info("✓ Base model loaded")
 
-#Magic step: laoad the PeftModel by "stacking" the LoRA adapters on top of the base model
-model = PeftModel.from_pretrained(base_model, LORA_PATH)
-model = model.eval()
+    # Load LoRA adapter (must be done before device_map)
+    logger.info("Loading LoRA adapter...")
+    model = PeftModel.from_pretrained(model, ADAPTER_PATH)
+    logger.info("✓ LoRA adapter loaded")
+    
+    logger.info("Merging LoRA weights into base model...")
+    model = model.merge_and_unload()
+    logger.info("✓ Weights merged")
 
-print("--- Model loading complete! ---")
+    logger.info("Applying Dynamic Quantization (int8)...")
+    model = quantize_dynamic(
+        model, {torch.nn.Linear}, dtype=torch.qint8
+    )
+    logger.info("✓ Model quantized to int8")
+    
+    model.eval()
+    logger.info("✓ Model ready for inference")
+    
+    logger.info("=" * 60)
+    logger.info("Model loading complete! API is ready to accept requests.")
+    logger.info("=" * 60)
 
-#---FastAPI App step - pretty easy
-
-app = FastAPI(
-    title="Tony Soprano API",
-    description="API for generating replies in the voice of Tony Soprano.",
-    version="1.0.0"
-)
-
-#defines data model for request
-class PromptRequest(BaseModel):
+class Query(BaseModel):
     prompt: str
 
-@app.get("/")
-def read_root():
-    return {"message": "Ay-oh! The API is runnin'. Whaddaya want?"}
+def generate_response(prompt):
+    text = (
+        f"Instruction: {prompt}\n"
+        f"Write 1–3 complete sentences.\n"
+        f"Response:\n"
+    )
 
-@app.post("/generate")
-async def generate_reply(request: PromptRequest):
-    """
-    Takes a user prompt and returns a Tony Soprano-style response.
-    """
-    try:
+    inputs = tokenizer(text, return_tensors="pt")
 
-        formatted_prompt = f"Instruct: Respond like Tony Soprano.\nUser: {request.prompt}\nOutput:"
+    with torch.no_grad():
+        output = model.generate(
+            **inputs,
+            max_new_tokens=150,
+            do_sample=True,
+            temperature=1.1,
+            top_p=0.95,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.eos_token_id
+        )
 
-        #tokenize the input
-        inputs = tokenizer(
-            formatted_prompt, 
-            return_tensors="pt", 
-            return_attention_mask=True
-        ).to(DEVICE)
-
-        #gnerate the response
-        with torch.no_grad():
-            outputs = model.generate(
-                input_ids=inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
-                max_new_tokens=150, #limit the response length
-                do_sample=True,
-                temperature=0.7, #couldnt play around with these toggles since inference time was too long on my CPU, but seemed to work well regardless
-                top_k=50,
-                top_p=0.95,
-                pad_token_id=tokenizer.eos_token_id
-            )
-        
-        #decode the output
-        response_text = tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-        
-        return {"prompt": request.prompt, "response": response_text.strip()}
-
-    except Exception as e:
-        print(f"Error during generation: {e}")
-        return {"error": f"Internal server error: {e}"}
-
-#allows you to run the app with `python main.py`
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    out = tokenizer.decode(output
