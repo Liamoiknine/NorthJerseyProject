@@ -1,7 +1,33 @@
 {
-  "add_prefix_space": false,
+  "add_bos_token": false,
+  "add_eos_token": false,
+  "add_prefix_space": null,
   "added_tokens_decoder": {
-    "50256": {
+    "0": {
+      "content": "<unk>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "1": {
+      "content": "<s>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "2": {
+      "content": "</s>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": true,
+      "single_word": false,
+      "special": false
+    },
+    "32000": {
       "content": "<|endoftext|>",
       "lstrip": false,
       "normalized": false,
@@ -9,317 +35,97 @@
       "single_word": false,
       "special": true
     },
-    "50257": {
-      "content": "                               ",
+    "32001": {
+      "content": "<|assistant|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50258": {
-      "content": "                              ",
+    "32002": {
+      "content": "<|placeholder1|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50259": {
-      "content": "                             ",
+    "32003": {
+      "content": "<|placeholder2|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50260": {
-      "content": "                            ",
+    "32004": {
+      "content": "<|placeholder3|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50261": {
-      "content": "                           ",
+    "32005": {
+      "content": "<|placeholder4|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50262": {
-      "content": "                          ",
+    "32006": {
+      "content": "<|system|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50263": {
-      "content": "                         ",
+    "32007": {
+      "content": "<|end|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50264": {
-      "content": "                        ",
+    "32008": {
+      "content": "<|placeholder5|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50265": {
-      "content": "                       ",
+    "32009": {
+      "content": "<|placeholder6|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
+      "special": true
     },
-    "50266": {
-      "content": "                      ",
+    "32010": {
+      "content": "<|user|>",
       "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
+      "normalized": false,
+      "rstrip": true,
       "single_word": false,
-      "special": false
-    },
-    "50267": {
-      "content": "                     ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50268": {
-      "content": "                    ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50269": {
-      "content": "                   ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50270": {
-      "content": "                  ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50271": {
-      "content": "                 ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50272": {
-      "content": "                ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50273": {
-      "content": "               ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50274": {
-      "content": "              ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50275": {
-      "content": "             ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50276": {
-      "content": "            ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50277": {
-      "content": "           ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50278": {
-      "content": "          ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50279": {
-      "content": "         ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50280": {
-      "content": "        ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50281": {
-      "content": "       ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50282": {
-      "content": "      ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50283": {
-      "content": "     ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50284": {
-      "content": "    ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50285": {
-      "content": "   ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50286": {
-      "content": "  ",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50287": {
-      "content": "\t\t\t\t\t\t\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50288": {
-      "content": "\t\t\t\t\t\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50289": {
-      "content": "\t\t\t\t\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50290": {
-      "content": "\t\t\t\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50291": {
-      "content": "\t\t\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50292": {
-      "content": "\t\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50293": {
-      "content": "\t\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
-    },
-    "50294": {
-      "content": "\t\t",
-      "lstrip": false,
-      "normalized": true,
-      "rstrip": false,
-      "single_word": false,
-      "special": false
+      "special": true
     }
   },
-  "bos_token": "<|endoftext|>",
-  "clean_up_tokenization_spaces": true,
+  "bos_token": "<s>",
+  "clean_up_tokenization_spaces": false,
   "eos_token": "<|endoftext|>",
   "extra_special_tokens": {},
-  "model_max_length": 2048,
-  "return_token_type_ids": false,
-  "tokenizer_class": "CodeGenTokenizer",
-  "unk_token": "<|endoftext|>"
+  "legacy": false,
+  "model_max_length": 4096,
+  "pad_token": "<|endoftext|>",
+  "padding_side": "left",
+  "sp_model_kwargs": {},
+  "tokenizer_class": "LlamaTokenizer",
+  "unk_token": "<unk>",
+  "use_default_system_prompt": false
 }

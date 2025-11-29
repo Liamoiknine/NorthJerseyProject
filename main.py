@@ -29,9 +29,10 @@ async def lifespan(app: FastAPI):
         threads = os.cpu_count() or 2
         
         # Load the GGUF model directly
+        # Phi-3-mini-4k-instruct supports up to 4096 tokens context
         llm = Llama(
             model_path="./tony.gguf",
-            n_ctx=2048,
+            n_ctx=4096,
             n_threads=threads,
             verbose=False
         )
@@ -84,14 +85,16 @@ def generate(query: Query):
     if llm is None:
         return {"error": "Model is still loading."}, 503
     
-    # Prompt formatting
-    formatted_prompt = f"Instruct: Respond like Tony Soprano would. He is slightly agitated and on-edge. Be somewhat vulger in your response.\nUser: {query.prompt}\nOutput:"
+    # Prompt formatting for Phi-3-mini-4k-instruct
+    # Phi-3 uses a chat template format, but since we're using GGUF via llama.cpp,
+    # the format may depend on how the model was converted. This format should work:
+    formatted_prompt = f"<s><|user|>\nRespond like Tony Soprano would. He is slightly agitated and on-edge. Be somewhat vulger in your response.\n\nUser: {query.prompt}<|end|>\n<|assistant|>\n"
     
     # Inference
     output = llm(
         formatted_prompt,
         max_tokens=128, 
-        stop=["User:", "\nUser", "Instruct:"],
+        stop=["<|end|>", "<|user|>", "User:", "\nUser", "Instruct:"],
         echo=False
     )
     
