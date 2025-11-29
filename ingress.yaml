@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sopranobot-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+spec:
+  ingressClassName: "gce"
+  defaultBackend: 
+    service:
+      name: sopranobot-service
+      port:
+        number: 80
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sopranobot-service
+            port:
+              number: 80

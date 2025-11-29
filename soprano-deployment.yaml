@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sopranobot-deployment
+  labels:
+    app: sopranobot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sopranobot
+  template:
+    metadata:
+      labels:
+        app: sopranobot
+    spec:
+      containers:
+      - name: sopranobot
+        image: mdallolmo1/soprano-bot:v2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        
+        # OPTIMIZED RESOURCES FOR GGUF
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"   # Guarantee 2 cores (Enough to run, just slower)
+          limits:
+            memory: "16Gi"
+            cpu: "8000m"   # Allow bursting up to 8 cores if the node is idle
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3
