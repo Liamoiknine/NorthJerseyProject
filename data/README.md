@@ -1,13 +1,13 @@
 ## Dataset Breakdown
 
-| Category                      | Count   |
-| ----------------------------- | ------- |
-| **soprano_dpo_pairs dataset** | 500     |
-| **Multi-turn dialog**         | 150–250 |
-| **Emotional variation**       | 150–200 |
-| **Everyday topics**           | 200–400 |
-| **Guardrails**                | 50–80   |
-| **Environmental grounding**   | 50–100  |
+| Category                      | Count |
+| ----------------------------- | ----- |
+| **soprano_dpo_pairs dataset** | 500   |
+| **Multi-turn dialog**         | 210   |
+| **Emotional variation**       | 210   |
+| **Everyday topics**           | 300   |
+| **Guardrails**                | 90    |
+| **Environmental grounding**   | 75    |
 
 ## Category Descriptions
 
