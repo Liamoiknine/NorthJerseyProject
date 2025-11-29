@@ -1,7 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
+import { encodingForModel } from 'js-tiktoken';
 
 const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
+
+// Initialize tokenizer (cl100k_base encoding for Phi-3)
+const tokenizer = encodingForModel('gpt-3.5-turbo'); // Uses cl100k_base
+
+// Token limits
+const MAX_INPUT_TOKENS = 512;
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,7 +26,10 @@ export default function SopranoChatbot() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [inputTokenCount, setInputTokenCount] = useState(0);
+  const [isTokenLimitReached, setIsTokenLimitReached] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previousInputRef = useRef<string>('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,6 +38,44 @@ export default function SopranoChatbot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const countTokens = (text: string): number => {
+    try {
+      return tokenizer.encode(text).length;
+    } catch (error) {
+      console.error('Token counting error:', error);
+      // Fallback: rough estimate (4 chars per token)
+      return Math.ceil(text.length / 4);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const tokenCount = countTokens(newValue);
+    
+    if (tokenCount > MAX_INPUT_TOKENS) {
+      // Truncate to max tokens by encoding and decoding
+      try {
+        const tokens = tokenizer.encode(newValue);
+        const truncatedTokens = tokens.slice(0, MAX_INPUT_TOKENS);
+        const truncated = tokenizer.decode(truncatedTokens);
+        setInput(truncated);
+        setInputTokenCount(MAX_INPUT_TOKENS);
+        setIsTokenLimitReached(true);
+        previousInputRef.current = truncated;
+      } catch (error) {
+        // Fallback: keep previous value to prevent further input
+        setInput(previousInputRef.current);
+        setInputTokenCount(MAX_INPUT_TOKENS);
+        setIsTokenLimitReached(true);
+      }
+    } else {
+      setInput(newValue);
+      setInputTokenCount(tokenCount);
+      setIsTokenLimitReached(tokenCount === MAX_INPUT_TOKENS);
+      previousInputRef.current = newValue;
+    }
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -43,23 +91,40 @@ export default function SopranoChatbot() {
       return;
     }
 
+    // Capture input value before clearing it
+    const currentPrompt = input.trim();
+    
     const userMessage: Message = {
       role: 'user',
-      content: input,
+      content: currentPrompt,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setInputTokenCount(0);
+    setIsTokenLimitReached(false);
+    previousInputRef.current = '';
     setIsLoading(true);
 
     try {
+      // Prepare history (exclude initial greeting message and current message)
+      const historyMessages = messages
+        .slice(1) // Skip initial greeting
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt: input })
+        body: JSON.stringify({ 
+          prompt: currentPrompt,
+          history: historyMessages
+        })
       });
 
       if (!response.ok) throw new Error('Network response was not ok');
@@ -185,7 +250,7 @@ export default function SopranoChatbot() {
             <div className="flex-1 bg-zinc-800/80 backdrop-blur rounded-2xl border border-zinc-700 focus-within:border-amber-600 transition-colors shadow-lg">
               <textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
                 placeholder="Ask Tony something..."
                 className="w-full bg-transparent text-white placeholder-zinc-500 px-5 py-3 resize-none outline-none max-h-32"
@@ -205,9 +270,16 @@ export default function SopranoChatbot() {
               )}
             </button>
           </div>
-          <p className="text-xs text-zinc-500 mt-3 text-center">
-            Press Enter to send, Shift+Enter for new line
-          </p>
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs text-zinc-500 text-center flex-1">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+            {isTokenLimitReached && (
+              <p className="text-xs text-amber-500/80 ml-2">
+                Character limit reached. Further input will be cut off.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
