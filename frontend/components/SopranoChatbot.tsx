@@ -1,17 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2 } from 'lucide-react';
-import { encodingForModel } from 'js-tiktoken';
+import React, { useState, useRef, useEffect } from "react";
+import { Send, Loader2 } from "lucide-react";
+import { encodingForModel } from "js-tiktoken";
 
 const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
 
 // Initialize tokenizer (cl100k_base encoding for Phi-3)
-const tokenizer = encodingForModel('gpt-3.5-turbo'); // Uses cl100k_base
+const tokenizer = encodingForModel("gpt-3.5-turbo"); // Uses cl100k_base
 
 // Token limits
 const MAX_INPUT_TOKENS = 512;
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: Date;
 }
@@ -19,20 +19,20 @@ interface Message {
 export default function SopranoChatbot() {
   const [messages, setMessages] = useState<Message[]>([
     {
-      role: 'assistant',
+      role: "assistant",
       content: "Eyy, what's the matter with you? Go ahead, ask me something.",
-      timestamp: new Date()
-    }
+      timestamp: new Date(),
+    },
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [inputTokenCount, setInputTokenCount] = useState(0);
   const [isTokenLimitReached, setIsTokenLimitReached] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const previousInputRef = useRef<string>('');
+  const previousInputRef = useRef<string>("");
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -43,8 +43,7 @@ export default function SopranoChatbot() {
     try {
       return tokenizer.encode(text).length;
     } catch (error) {
-      console.error('Token counting error:', error);
-      // Fallback: rough estimate (4 chars per token)
+      console.error("Token counting error:", error);
       return Math.ceil(text.length / 4);
     }
   };
@@ -52,9 +51,8 @@ export default function SopranoChatbot() {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     const tokenCount = countTokens(newValue);
-    
+
     if (tokenCount > MAX_INPUT_TOKENS) {
-      // Truncate to max tokens by encoding and decoding
       try {
         const tokens = tokenizer.encode(newValue);
         const truncatedTokens = tokens.slice(0, MAX_INPUT_TOKENS);
@@ -64,7 +62,6 @@ export default function SopranoChatbot() {
         setIsTokenLimitReached(true);
         previousInputRef.current = truncated;
       } catch (error) {
-        // Fallback: keep previous value to prevent further input
         setInput(previousInputRef.current);
         setInputTokenCount(MAX_INPUT_TOKENS);
         setIsTokenLimitReached(true);
@@ -77,82 +74,124 @@ export default function SopranoChatbot() {
     }
   };
 
+  // --- UPDATED SEND MESSAGE FUNCTION FOR STREAMING ---
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
     if (!API_ENDPOINT) {
-      console.error('API endpoint not configured');
+      console.error("API endpoint not configured");
       const errorMessage: Message = {
-        role: 'assistant',
-        content: "Madone! The API endpoint isn't configured. Check your .env file.",
-        timestamp: new Date()
+        role: "assistant",
+        content:
+          "Madone! The API endpoint isn't configured. Check your .env file.",
+        timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
       return;
     }
 
-    // Capture input value before clearing it
     const currentPrompt = input.trim();
-    
+
+    // 1. Add User Message immediately
     const userMessage: Message = {
-      role: 'user',
+      role: "user",
       content: currentPrompt,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
+    // 2. Create a placeholder Assistant Message (empty content)
+    const placeholderAssistantMessage: Message = {
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage, placeholderAssistantMessage]);
+    setInput("");
     setInputTokenCount(0);
     setIsTokenLimitReached(false);
-    previousInputRef.current = '';
+    previousInputRef.current = "";
     setIsLoading(true);
 
     try {
-      // Prepare history (exclude initial greeting message and current message)
-      const historyMessages = messages
-        .slice(1) // Skip initial greeting
-        .map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
+      const historyMessages = messages.slice(1).map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
 
       const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           prompt: currentPrompt,
-          history: historyMessages
-        })
+          history: historyMessages,
+        }),
       });
 
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) throw new Error("Network response was not ok");
+      if (!response.body) throw new Error("Response body is empty");
 
-      const data = await response.json();
-      
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: data.response || 'Fuhgeddaboudit...',
-        timestamp: new Date()
-      };
+      // 3. Read the Stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
 
-      setMessages(prev => [...prev, assistantMessage]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        // SSE lines come as "data: {json}\n\n"
+        const lines = chunk
+          .split("\n\n")
+          .filter((line) => line.startsWith("data: "));
+
+        for (const line of lines) {
+          const jsonStr = line.replace("data: ", "");
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.token) {
+              accumulatedText += data.token;
+
+              // 4. Update the last message (the placeholder) in real-time
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                const lastMsg = newMessages[newMessages.length - 1];
+                // Ensure we are only updating the assistant's placeholder
+                if (lastMsg.role === "assistant") {
+                  lastMsg.content = accumulatedText;
+                }
+                return newMessages;
+              });
+            }
+          } catch (e) {
+            console.warn("Failed to parse SSE token:", jsonStr);
+          }
+        }
+      }
     } catch (error) {
-      console.error('Error:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: "Madone! Something went wrong with the connection. Try again, will ya?",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      console.error("Error:", error);
+      // If streaming fails, replace the empty placeholder with error text
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const lastMsg = newMessages[newMessages.length - 1];
+        if (lastMsg.role === "assistant" && !lastMsg.content) {
+          lastMsg.content =
+            "Madone! Something went wrong with the connection. Try again, will ya?";
+        }
+        return newMessages;
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
@@ -164,9 +203,9 @@ export default function SopranoChatbot() {
       <div className="bg-black/40 backdrop-blur-sm border-b border-amber-900/30 px-6 py-4 shadow-lg">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <div className="w-12 h-12 rounded-full overflow-hidden shadow-lg ring-2 ring-amber-600/50">
-            <img 
-              src="/tony.webp" 
-              alt="Tony Soprano" 
+            <img
+              src="/tony.webp"
+              alt="Tony Soprano"
               className="w-full h-full object-cover"
             />
           </div>
@@ -186,59 +225,48 @@ export default function SopranoChatbot() {
             <div
               key={index}
               className={`flex gap-3 ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
+                message.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
-              {message.role === 'assistant' && (
+              {message.role === "assistant" && (
                 <div className="w-8 h-8 rounded-full overflow-hidden shadow-md ring-2 ring-amber-600/30 flex-shrink-0">
-                  <img 
-                    src="/tony.webp" 
-                    alt="Tony Soprano" 
+                  <img
+                    src="/tony.webp"
+                    alt="Tony Soprano"
                     className="w-full h-full object-cover"
                   />
                 </div>
               )}
               <div
                 className={`max-w-2xl rounded-2xl px-5 py-3 shadow-lg ${
-                  message.role === 'user'
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
-                    : 'bg-zinc-800/80 backdrop-blur text-zinc-100 border border-amber-900/20'
+                  message.role === "user"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
+                    : "bg-zinc-800/80 backdrop-blur text-zinc-100 border border-amber-900/20"
                 }`}
               >
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">
                   {message.content}
+                  {/* Show typing cursor if loading and this is the last message */}
+                  {isLoading &&
+                    index === messages.length - 1 &&
+                    message.role === "assistant" && (
+                      <span className="inline-block w-1.5 h-4 ml-1 align-middle bg-amber-500 animate-pulse"></span>
+                    )}
                 </p>
                 <p className="text-xs mt-2 opacity-60">
                   {message.timestamp.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
+                    hour: "2-digit",
+                    minute: "2-digit",
                   })}
                 </p>
               </div>
-              {message.role === 'user' && (
+              {message.role === "user" && (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
                   U
                 </div>
               )}
             </div>
           ))}
-          {isLoading && (
-            <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-full overflow-hidden shadow-md ring-2 ring-amber-600/30 flex-shrink-0">
-                <img 
-                  src="/tony.webp" 
-                  alt="Tony Soprano" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="bg-zinc-800/80 backdrop-blur rounded-2xl px-5 py-3 border border-amber-900/20 shadow-lg">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-                  <span className="text-zinc-400 text-sm">Tony is thinking...</span>
-                </div>
-              </div>
-            </div>
-          )}
           <div ref={messagesEndRef} />
         </div>
       </div>
