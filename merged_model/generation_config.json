@@ -7,5 +7,5 @@
     32007
   ],
   "pad_token_id": 32000,
-  "transformers_version": "4.57.1"
+  "transformers_version": "4.57.3"
 }

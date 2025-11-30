@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: sopranobot
-        image: mdallolmo1/soprano-bot:v2
+        image: mdallolmo1/soprano-bot:v3
         imagePullPolicy: Always
         ports:
         - containerPort: 8000

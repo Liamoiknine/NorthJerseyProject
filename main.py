@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse # <--- ADDED StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import List, Optional, Tuple
 import tiktoken
+import json # <--- ADDED json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +32,6 @@ async def lifespan(app: FastAPI):
         threads = os.cpu_count() or 2
         
         # Load the GGUF model directly
-        # Phi-3-mini-4k-instruct supports up to 4096 tokens context
         llm = Llama(
             model_path="./tony.gguf",
             n_ctx=4096,
@@ -49,7 +49,6 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down model...")
 
 # --- APP INITIALIZATION ---
-# Now 'lifespan' is defined, so we can pass it in
 app = FastAPI(lifespan=lifespan)
 
 # CORS
@@ -78,7 +77,7 @@ except Exception as e:
 
 # Constants for token management
 MAX_CONTEXT = 4096
-SYSTEM_PROMPT_TOKENS = 150  # Approximate, will be calculated
+SYSTEM_PROMPT_TOKENS = 150 
 CURRENT_INPUT_TOKENS = 512
 RESPONSE_BUFFER_TOKENS = 512
 SAFETY_MARGIN_TOKENS = 100
@@ -105,7 +104,6 @@ def health_check():
 def count_tokens(text: str) -> int:
     """Count tokens in text using tiktoken with cl100k_base encoding."""
     if tokenizer is None:
-        # Fallback: rough estimate (4 chars per token)
         return len(text) // 4
     return len(tokenizer.encode(text))
 
@@ -119,7 +117,6 @@ def format_message_for_prompt(role: str, content: str) -> str:
 def build_conversation_prompt(system_prompt: str, history: List[Message], current_input: str) -> Tuple[str, int]:
     """
     Build full conversation prompt with FIFO history management.
-    Returns the formatted prompt and the actual token count.
     """
     # Start with system prompt
     system_formatted = f"<s><|user|>\n{system_prompt}\n\n"
@@ -129,22 +126,15 @@ def build_conversation_prompt(system_prompt: str, history: List[Message], curren
     current_formatted = format_message_for_prompt("user", current_input)
     current_tokens = count_tokens(current_formatted)
     
-    # Calculate available tokens for history
-    # We need: system + current + response buffer + safety margin
     used_tokens = system_tokens + current_tokens
     available_for_history = MAX_CONTEXT - used_tokens - RESPONSE_BUFFER_TOKENS - SAFETY_MARGIN_TOKENS
     
-    # Build history with FIFO (add oldest messages first until we approach limit)
     history_text = ""
     history_tokens = 0
-    included_messages = []
     
-    # Process history in pairs (user + assistant) to maintain conversation flow
     i = 0
     while i < len(history):
-        # Get a message pair if available
         if i + 1 < len(history) and history[i].role == "user" and history[i + 1].role == "assistant":
-            # Complete pair
             user_msg = history[i]
             assistant_msg = history[i + 1]
             
@@ -154,16 +144,13 @@ def build_conversation_prompt(system_prompt: str, history: List[Message], curren
             pair_text = user_formatted + assistant_formatted
             pair_tokens = count_tokens(pair_text)
             
-            # Check if adding this pair would exceed limit
             if history_tokens + pair_tokens > available_for_history:
-                break  # Stop adding more history
+                break 
             
             history_text += pair_text
             history_tokens += pair_tokens
-            included_messages.extend([user_msg, assistant_msg])
             i += 2
         else:
-            # Single message (orphaned), add it if it fits
             msg = history[i]
             msg_formatted = format_message_for_prompt(msg.role, msg.content)
             msg_tokens = count_tokens(msg_formatted)
@@ -173,13 +160,10 @@ def build_conversation_prompt(system_prompt: str, history: List[Message], curren
             
             history_text += msg_formatted
             history_tokens += msg_tokens
-            included_messages.append(msg)
             i += 1
     
-    # Build final prompt
     assistant_start = "<|assistant|>\n"
     full_prompt = system_formatted + history_text + current_formatted + assistant_start
-    
     total_tokens = count_tokens(full_prompt)
     
     logger.debug(f"Prompt tokens: system={system_tokens}, history={history_tokens}, current={current_tokens}, total={total_tokens}")
@@ -187,7 +171,7 @@ def build_conversation_prompt(system_prompt: str, history: List[Message], curren
     return full_prompt, total_tokens
 
 @app.post("/generate")
-def generate(query: Query):
+async def generate(query: Query):
     if llm is None:
         return {"error": "Model is still loading."}, 503
     
@@ -201,20 +185,31 @@ def generate(query: Query):
         query.prompt
     )
     
-    # Log if we're approaching context limit
     if prompt_tokens > MAX_CONTEXT - RESPONSE_BUFFER_TOKENS:
         logger.warning(f"Prompt tokens ({prompt_tokens}) approaching context limit. Response may be truncated.")
     
-    # Inference
-    output = llm(
-        formatted_prompt,
-        max_tokens=512, 
-        stop=["<|end|>", "<|user|>", "User:", "\nUser", "Instruct:"],
-        echo=False
-    )
-    
-    response_text = output["choices"][0]["text"].strip()
-    return {"response": response_text}
+    # --- STREAMING LOGIC ---
+    def token_generator():
+        stream = llm(
+            formatted_prompt,
+            max_tokens=512, 
+            stop=["<|end|>", "<|user|>", "User:", "\nUser", "Instruct:"],
+            echo=False,
+            stream=True # <--- Enable Streaming
+        )
+        
+        for output in stream:
+            # Extract the token text
+            token = output["choices"][0]["text"]
+            
+            # Yield in SSE format (data: <json>\n\n)
+            # This allows the frontend to parse it easily
+            yield f"data: {json.dumps({'token': token})}\n\n"
+            
+        # Optional: Send a [DONE] message if your frontend expects it
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(token_generator(), media_type="text/event-stream")
 
 if __name__ == "__main__":
     import uvicorn
